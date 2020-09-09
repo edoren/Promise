@@ -34,15 +34,15 @@ public:
     template <typename U>
     friend class Promise;
 
-    enum class Status { Resolved, Rejected, Ongoing };
+    enum class Status { RESOLVED, REJECTED, ONGOING };
 
 private:
     class SharedState {
     public:
         void resolve(const T& value) {
             std::lock_guard<std::mutex> lock(m_fulfilledMutex);
-            if (m_status == Promise::Status::Ongoing) {
-                m_status = Promise::Status::Resolved;
+            if (m_status == Promise::Status::ONGOING) {
+                m_status = Promise::Status::RESOLVED;
                 m_value = value;
                 for (auto& callback : m_resolveCallbacks) {
                     callback(value);
@@ -60,11 +60,11 @@ private:
 
         void reject(std::string_view error) {
             std::lock_guard<std::mutex> lock(m_fulfilledMutex);
-            if (m_status == Promise::Status::Ongoing) {
-                m_status = Promise::Status::Rejected;
+            if (m_status == Promise::Status::ONGOING) {
+                m_status = Promise::Status::REJECTED;
                 m_error.assign(error.begin(), error.end());
                 for (auto& callback : m_rejectCallbacks) {
-                    callback(m_error.c_str());
+                    callback(m_error);
                 }
                 for (auto& callback : m_finallyCallbacks) {
                     callback();
@@ -106,14 +106,14 @@ private:
         }
 
         void wait() {
-            if (m_status == Promise::Status::Ongoing) {
+            if (m_status == Promise::Status::ONGOING) {
                 std::unique_lock<std::mutex> lock(m_signalMutex);
                 m_signaler.wait(lock);
             }
         }
 
     private:
-        Promise::Status m_status = Promise::Status::Ongoing;
+        Promise::Status m_status = Promise::Status::ONGOING;
         T m_value;
         std::string m_error;
         std::mutex m_fulfilledMutex;
@@ -140,7 +140,7 @@ public:
 
     Promise(const Promise& other) = default;
 
-    Promise(Promise&& other) = default;
+    Promise(Promise&& other) noexcept = default;
 
     static Promise Resolve(const T& value) {
         // std::cout << "Resolve new" << std::endl;
@@ -168,7 +168,7 @@ public:
 
         static_assert(IsPromise<PromiseRetType>::value, "Promise execution should return another promise or void");
 
-        if (!m_shared || m_shared->getStatus() == Promise::Status::Rejected) {
+        if (!m_shared || m_shared->getStatus() == Promise::Status::REJECTED) {
             if constexpr (std::is_void_v<FuncRetType>) {
                 return *this;
             } else {
@@ -177,23 +177,22 @@ public:
                 } else {
                     if (!m_shared) {
                         return PromiseRetType::Reject("Non-initialized promise");
-                    } else {
-                        return PromiseRetType::Reject(m_shared->getError());
                     }
+                    return PromiseRetType::Reject(m_shared->getError());
                 }
             }
         }
 
         std::lock_guard<std::mutex> lock(m_shared->getMutex());
 
-        if (m_shared->getStatus() == Promise::Status::Resolved) {
+        if (m_shared->getStatus() == Promise::Status::RESOLVED) {
             if constexpr (std::is_void_v<FuncRetType>) {
                 func(m_shared->getValue());
                 return *this;
             } else {
                 return func(m_shared->getValue());
             }
-        } else if (m_shared->getStatus() == Promise::Status::Ongoing) {
+        } else if (m_shared->getStatus() == Promise::Status::ONGOING) {
             if constexpr (std::is_void_v<FuncRetType>) {
                 // std::cout << "Ongoing (void) new" << std::endl;
                 auto newShared = std::make_shared<SharedState>();
@@ -235,9 +234,9 @@ public:
             return *this;
         }
 
-        if (m_shared->getStatus() == Promise::Status::Rejected) {
+        if (m_shared->getStatus() == Promise::Status::REJECTED) {
             func(m_shared->getError());
-        } else if (m_shared->getStatus() == Promise::Status::Ongoing) {
+        } else if (m_shared->getStatus() == Promise::Status::ONGOING) {
             m_shared->appendRejectCallback([func](auto& error) { func(error); });
         }
 
@@ -252,7 +251,7 @@ public:
 
         static_assert(std::is_void_v<std::invoke_result_t<Func>>, "Promise finally callback should return void");
 
-        if (m_shared->getStatus() != Promise::Status::Ongoing) {
+        if (m_shared->getStatus() != Promise::Status::ONGOING) {
             func();
         } else {
             m_shared->appendFinallyCallback([func]() { func(); });
@@ -268,7 +267,7 @@ public:
     }
 
 private:
-    Promise(std::shared_ptr<SharedState> state) : m_shared(state) {}
+    Promise(std::shared_ptr<SharedState> state) : m_shared(std::move(state)) {}
 
     std::shared_ptr<SharedState> m_shared;
 };

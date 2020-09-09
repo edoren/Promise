@@ -8,7 +8,9 @@ using namespace edoren;
 int main(int argc, const char* argv[]) {
     using namespace std::chrono_literals;
 
-    std::thread thread, thread2;
+    std::thread thread;
+
+    std::thread thread2;
 
     auto prom = Promise<int>([&thread](auto&& resolve, auto&& reject) {
                     thread = std::thread([resolve, reject] {
