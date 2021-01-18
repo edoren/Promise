@@ -131,8 +131,12 @@ public:
     Promise(Func&& executor) {
         // std::cout << "Creating 1" << std::endl;
         m_shared = std::make_shared<SharedState>();
-        executor([shared = m_shared](const T& value) { shared->resolve(value); },
-                 [shared = m_shared](std::string_view reason) { shared->reject(reason); });
+        auto resolveFn = [shared = m_shared](const T& value) { shared->resolve(value); };
+        auto rejectFn = [shared = m_shared](std::string_view reason) { shared->reject(reason); };
+        // static_assert(std::is_invocable<decltype(executor), decltype(resolveFn), decltype(rejectFn)>::value,
+        //               "Executor provider executor should accept a resolve and reject function, "
+        //               "please use: [](auto&& resolve, auto&& reject) {}");
+        executor(std::move(resolveFn), std::move(rejectFn));
     }
 
     using ValueType = T;

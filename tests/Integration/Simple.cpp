@@ -21,14 +21,16 @@ int main(int argc, const char* argv[]) {
                     .then([](const int& value) {
                         std::cout << "Int: " << value << std::endl;
                         // return Promise<long>::Resolve(10);
-                        // return Promise<long>::Reject("FAILED");
+                        return Promise<long>::Reject("FAILED");
                     })
                     .then([](const long& value) {
                         std::cout << "Long: " << value << std::endl;
                         return Promise<std::string>::Resolve("Hello World");
                         // return Promise<std::string>::Reject("FAILED");
                     })
-                    .then([](const std::string& value) { std::cout << "Result: " << value << std::endl; })
+                    .then([](const std::string& value) {
+                        std::cout << "Result: " << value << std::endl; //
+                    })
                     .then([&thread2](const std::string& value) {
                         std::cout << "Result 2: " << value << std::endl;
                         return Promise<int>([&thread2](auto&& resolve, auto&& reject) {
@@ -38,12 +40,12 @@ int main(int argc, const char* argv[]) {
                             });
                         });
                     })
-                    .failed([](auto& error) { std::cout << "Error!!! - " << error << std::endl; })
+                    .failed([](const std::string& error) { std::cout << "Error!!! - " << error << std::endl; })
                     .finally([] { std::cout << "Finished" << std::endl; });
 
     std::cout << "HELLO PROMISE" << std::endl;
 
-    prom.wait();
+    // prom.wait();
 
     if (thread.joinable()) {
         thread.join();
