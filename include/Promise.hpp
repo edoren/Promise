@@ -12,14 +12,6 @@
 namespace edoren {
 
 template <typename T>
-using ResolveCallback = std::function<void(const T& value)>;
-
-using RejectCallback = std::function<void(const std::string& value)>;
-
-template <typename T>
-using FinallyCallback = std::function<void(void)>;
-
-template <typename T>
 class Promise;
 
 template <typename T>
@@ -35,6 +27,10 @@ public:
     friend class Promise;
 
     enum class Status { RESOLVED, REJECTED, ONGOING };
+
+    using ResolveCallback = std::function<void(const T& value)>;
+    using RejectCallback = std::function<void(const std::string& value)>;
+    using FinallyCallback = std::function<void(void)>;
 
 private:
     class SharedState {
@@ -93,7 +89,7 @@ private:
             return m_fulfilledMutex;
         }
 
-        void appendResolveCallback(ResolveCallback<T>&& callback) {
+        void appendResolveCallback(ResolveCallback&& callback) {
             m_resolveCallbacks.push_back(std::move(callback));
         }
 
@@ -101,7 +97,7 @@ private:
             m_rejectCallbacks.push_back(std::move(callback));
         }
 
-        void appendFinallyCallback(FinallyCallback<T>&& callback) {
+        void appendFinallyCallback(FinallyCallback&& callback) {
             m_finallyCallbacks.push_back(std::move(callback));
         }
 
@@ -121,9 +117,9 @@ private:
         std::condition_variable m_signaler;
         std::mutex m_signalMutex;
 
-        std::vector<ResolveCallback<T>> m_resolveCallbacks;
+        std::vector<ResolveCallback> m_resolveCallbacks;
         std::vector<RejectCallback> m_rejectCallbacks;
-        std::vector<FinallyCallback<T>> m_finallyCallbacks;
+        std::vector<FinallyCallback> m_finallyCallbacks;
     };
 
 public:

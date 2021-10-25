@@ -5,7 +5,7 @@ class PromiseTestsConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     requires = (
         "catch2/2.13.0",
-        "libcurl/7.74.0"
+        "libcurl/7.79.1"
     )
     generators = "cmake"
     default_options = {}

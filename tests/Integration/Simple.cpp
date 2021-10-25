@@ -4,10 +4,9 @@
 #include <thread>
 
 using namespace edoren;
+using namespace std::chrono_literals;
 
 int main(int argc, const char* argv[]) {
-    using namespace std::chrono_literals;
-
     std::thread thread;
 
     std::thread thread2;
@@ -29,7 +28,7 @@ int main(int argc, const char* argv[]) {
                         // return Promise<std::string>::Reject("FAILED");
                     })
                     .then([](const std::string& value) {
-                        std::cout << "Result: " << value << std::endl; //
+                        std::cout << "Result: " << value << std::endl;  //
                     })
                     .then([&thread2](const std::string& value) {
                         std::cout << "Result 2: " << value << std::endl;
