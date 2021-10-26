@@ -3,7 +3,7 @@
 
 #include <curl/curl.h>
 
-#include <Promise.hpp>
+#include <edoren/Promise.hpp>
 
 using namespace edoren;
 using namespace std::chrono_literals;
@@ -48,12 +48,11 @@ int main(int argc, const char* argv[]) {
 
                         resolve(response_string);
                     });
-                })
-                    .then([](const std::string& value) {
-                        std::cout << value << std::endl;
-                        // return Promise<long>::Resolve(10);
-                        return Promise<long>::Reject("FAILED");
-                    });
+                }).then([](const std::string& value) {
+        std::cout << value << std::endl;
+        // return Promise<long>::Resolve(10);
+        return Promise<long>::Reject("FAILED");
+    });
 
     std::cout << "HELLO REQUEST" << std::endl;
 

@@ -3,7 +3,7 @@
 
 #include <catch2/catch.hpp>
 
-#include <Promise.hpp>
+#include <edoren/Promise.hpp>
 
 using namespace edoren;
 
