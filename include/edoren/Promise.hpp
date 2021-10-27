@@ -168,13 +168,14 @@ public:
         using FuncRetType = std::invoke_result_t<Func, const ResolveType&>;
 
         static_assert(IsPromise<PromiseRetType>::value, "Promise execution should return another promise or void");
-        static_assert(std::is_same_v<RejectType, PromiseRetType::RejectType>, "Promise RejectType should be the same");
+        static_assert(std::is_same_v<RejectType, typename PromiseRetType::RejectType>,
+                      "Promise RejectType should be the same");
 
         if (!m_shared || m_shared->getStatus() == Promise::Status::REJECTED) {
             if constexpr (std::is_void_v<FuncRetType>) {
                 return *this;
             } else {
-                if constexpr (std::is_same_v<ResolveType, PromiseRetType::ResolveType>) {
+                if constexpr (std::is_same_v<ResolveType, typename PromiseRetType::ResolveType>) {
                     return *this;
                 } else {
                     if (!m_shared) {
@@ -215,7 +216,7 @@ public:
                 return Promise(newShared);
             } else {
                 // std::cout << "Ongoing (Promise) new" << std::endl;
-                auto newShared = std::make_shared<PromiseRetType::SharedState>();
+                auto newShared = std::make_shared<typename PromiseRetType::SharedState>();
 
                 m_shared->appendResolveCallback([func, newShared](auto& value) {
                     PromiseRetType other = func(value);
