@@ -8,11 +8,11 @@
 using namespace edoren;
 
 template <typename CallbackFn, typename Val>
-std::thread&& AsyncTask(CallbackFn&& callback, Val&& value, long double duration = 0.25) {
-    return std::move(std::thread([callback, value, duration] {
+std::thread AsyncTask(CallbackFn&& callback, Val&& value, long double duration = 0.25) {
+    return std::thread([callback, value, duration] {
         std::this_thread::sleep_for(std::chrono::duration<long double>(duration));
         callback(value);
-    }));
+    });
 }
 
 TEST_CASE("Promise constructor should yield a value when resolved or rejected") {

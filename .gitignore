@@ -1,8 +1,5 @@
 # Build Folder
 /tests/build
 
-# VSCode
-/.vscode
-
 # MacOSX Files
 .DS_Store
