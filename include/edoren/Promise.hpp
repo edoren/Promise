@@ -12,31 +12,34 @@
 
 namespace edoren {
 
-template <typename T>
+template <typename Res, typename Rej = std::string>
 class Promise;
 
 template <typename T>
 struct IsPromise : public std::false_type {};
 
-template <typename T>
-struct IsPromise<Promise<T>> : public std::true_type {};
+template <typename Res, typename Rej>
+struct IsPromise<Promise<Res, Rej>> : public std::true_type {};
 
-template <typename T>
+template <typename Res, typename Rej>
 class Promise {
 public:
-    template <typename U>
+    template <typename ResU, typename RejV>
     friend class Promise;
 
     enum class Status { RESOLVED, REJECTED, ONGOING };
 
-    using ResolveCallback = std::function<void(const T& value)>;
-    using RejectCallback = std::function<void(const std::string& value)>;
+    using ResolveType = Res;
+    using RejectType = Rej;
+
+    using ResolveCallback = std::function<void(const ResolveType& value)>;
+    using RejectCallback = std::function<void(const RejectType& value)>;
     using FinallyCallback = std::function<void(void)>;
 
 private:
     class SharedState {
     public:
-        void resolve(const T& value) {
+        void resolve(const ResolveType& value) {
             std::lock_guard<std::mutex> lock(m_fulfilledMutex);
             if (m_status == Promise::Status::ONGOING) {
                 m_status = Promise::Status::RESOLVED;
@@ -55,11 +58,11 @@ private:
             }
         }
 
-        void reject(std::string_view error) {
+        void reject(const RejectType& error) {
             std::lock_guard<std::mutex> lock(m_fulfilledMutex);
             if (m_status == Promise::Status::ONGOING) {
                 m_status = Promise::Status::REJECTED;
-                m_error.assign(error.begin(), error.end());
+                m_error = error;
                 for (auto& callback : m_rejectCallbacks) {
                     callback(m_error);
                 }
@@ -78,11 +81,11 @@ private:
             return m_status;
         }
 
-        const T& getValue() const {
+        const ResolveType& getValue() const {
             return m_value;
         }
 
-        const std::string& getError() const {
+        const RejectType& getError() const {
             return m_error;
         }
 
@@ -111,8 +114,8 @@ private:
 
     private:
         Promise::Status m_status = Promise::Status::ONGOING;
-        T m_value;
-        std::string m_error;
+        ResolveType m_value;
+        RejectType m_error;
         std::mutex m_fulfilledMutex;
 
         std::condition_variable m_signaler;
@@ -128,29 +131,26 @@ public:
     Promise(Func&& executor) {
         // std::cout << "Creating 1" << std::endl;
         m_shared = std::make_shared<SharedState>();
-        auto resolveFn = [shared = m_shared](const T& value) { shared->resolve(value); };
-        auto rejectFn = [shared = m_shared](std::string_view reason) { shared->reject(reason); };
+        auto resolveFn = [shared = m_shared](const ResolveType& value) { shared->resolve(value); };
+        auto rejectFn = [shared = m_shared](const RejectType& reason) { shared->reject(reason); };
         // static_assert(std::is_invocable<decltype(executor), decltype(resolveFn), decltype(rejectFn)>::value,
         //               "Executor provider executor should accept a resolve and reject function, "
         //               "please use: [](auto&& resolve, auto&& reject) {}");
         executor(std::move(resolveFn), std::move(rejectFn));
     }
 
-    using ValueType = T;
-    using SharedType = SharedState;
-
     Promise(const Promise& other) = default;
 
     Promise(Promise&& other) noexcept = default;
 
-    static Promise Resolve(const T& value) {
+    static Promise Resolve(const ResolveType& value) {
         // std::cout << "Resolve new" << std::endl;
         auto newShared = std::make_shared<SharedState>();
         newShared->resolve(value);
         return Promise(newShared);
     }
 
-    static Promise Reject(std::string_view reason) {
+    static Promise Reject(const RejectType& reason) {
         // std::cout << "Reject new" << std::endl;
         auto newShared = std::make_shared<SharedState>();
         newShared->reject(reason);
@@ -159,25 +159,31 @@ public:
 
     template <typename Func,
               typename PromiseRetType =
-                  std::enable_if_t<(std::is_void_v<std::invoke_result_t<Func, const T&>> ||
-                                    IsPromise<std::invoke_result_t<Func, const T&>>::value),
-                                   std::conditional_t<std::is_void_v<std::invoke_result_t<Func, const T&>>,
+                  std::enable_if_t<(std::is_void_v<std::invoke_result_t<Func, const ResolveType&>> ||
+                                    IsPromise<std::invoke_result_t<Func, const ResolveType&>>::value),
+                                   std::conditional_t<std::is_void_v<std::invoke_result_t<Func, const ResolveType&>>,
                                                       Promise,
-                                                      std::invoke_result_t<Func, const T&>>>>
+                                                      std::invoke_result_t<Func, const ResolveType&>>>>
     auto then(Func&& func) const -> PromiseRetType {
-        using FuncRetType = std::invoke_result_t<Func, const T&>;
+        using FuncRetType = std::invoke_result_t<Func, const ResolveType&>;
 
         static_assert(IsPromise<PromiseRetType>::value, "Promise execution should return another promise or void");
+        static_assert(std::is_same_v<RejectType, PromiseRetType::RejectType>, "Promise RejectType should be the same");
 
         if (!m_shared || m_shared->getStatus() == Promise::Status::REJECTED) {
             if constexpr (std::is_void_v<FuncRetType>) {
                 return *this;
             } else {
-                if constexpr (std::is_same_v<ValueType, typename PromiseRetType::ValueType>) {
+                if constexpr (std::is_same_v<ResolveType, PromiseRetType::ResolveType>) {
                     return *this;
                 } else {
                     if (!m_shared) {
-                        return PromiseRetType::Reject("Non-initialized promise");
+                        // Error: Non-initialized promise
+                        if constexpr (std::is_constructible_v<RejectType, std::string_view>) {
+                            return PromiseRetType::Reject(RejectType("Non-initialized promise"));
+                        } else {
+                            return PromiseRetType::Reject(RejectType());
+                        }
                     }
                     return PromiseRetType::Reject(m_shared->getError());
                 }
@@ -209,7 +215,7 @@ public:
                 return Promise(newShared);
             } else {
                 // std::cout << "Ongoing (Promise) new" << std::endl;
-                auto newShared = std::make_shared<typename PromiseRetType::SharedType>();
+                auto newShared = std::make_shared<PromiseRetType::SharedState>();
 
                 m_shared->appendResolveCallback([func, newShared](auto& value) {
                     PromiseRetType other = func(value);
@@ -224,14 +230,22 @@ public:
             }
         }
 
-        // ERROR This should not happen as all the cases are covered
-        return PromiseRetType::Reject("Non-initialized promise");
+        // ERROR: This should not happen as all the cases are covered
+        if constexpr (std::is_constructible_v<RejectType, std::string_view>) {
+            return PromiseRetType::Reject(RejectType("Non-initialized promise"));
+        } else {
+            return PromiseRetType::Reject(RejectType());
+        }
     }
 
     template <typename Func>
     auto failed(Func&& func) -> Promise& {
         if (!m_shared) {
-            func("Promise has been moved");
+            auto reason = RejectType();
+            if constexpr (std::is_constructible_v<RejectType, std::string_view>) {
+                reason = RejectType("Promise has been moved");
+            }
+            func(reason);
             return *this;
         }
 
